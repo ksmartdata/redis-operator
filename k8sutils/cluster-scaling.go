@@ -34,7 +34,7 @@ func ReshardRedisCluster(client kubernetes.Interface, logger logr.Logger, cr *re
 	if *cr.Spec.ClusterVersion == "v7" {
 		cmd = append(cmd, getRedisHostname(transferPOD, cr, "leader")+":6379")
 	} else {
-		cmd = append(cmd, getRedisServerIP(client, logger, transferPOD)+":6379")
+		cmd = append(cmd, getRedisServerIP(client, logger, transferPOD, ":6379"))
 	}
 
 	if cr.Spec.KubernetesConfig.ExistingPasswordSecret != nil {
@@ -159,7 +159,7 @@ func RebalanceRedisClusterEmptyMasters(client kubernetes.Interface, logger logr.
 	if *cr.Spec.ClusterVersion == "v7" {
 		cmd = append(cmd, getRedisHostname(pod, cr, "leader")+":6379")
 	} else {
-		cmd = append(cmd, getRedisServerIP(client, logger, pod)+":6379")
+		cmd = append(cmd, getRedisServerIP(client, logger, pod, ":6379"))
 	}
 
 	cmd = append(cmd, "--cluster-use-empty-masters")
@@ -211,7 +211,7 @@ func RebalanceRedisCluster(client kubernetes.Interface, logger logr.Logger, cr *
 	if *cr.Spec.ClusterVersion == "v7" {
 		cmd = append(cmd, getRedisHostname(pod, cr, "leader")+":6379")
 	} else {
-		cmd = append(cmd, getRedisServerIP(client, logger, pod)+":6379")
+		cmd = append(cmd, getRedisServerIP(client, logger, pod, ":6379"))
 	}
 
 	if cr.Spec.KubernetesConfig.ExistingPasswordSecret != nil {
@@ -249,8 +249,8 @@ func AddRedisNodeToCluster(ctx context.Context, client kubernetes.Interface, log
 		cmd = append(cmd, getRedisHostname(newPod, cr, "leader")+":6379")
 		cmd = append(cmd, getRedisHostname(existingPod, cr, "leader")+":6379")
 	} else {
-		cmd = append(cmd, getRedisServerIP(client, logger, newPod)+":6379")
-		cmd = append(cmd, getRedisServerIP(client, logger, existingPod)+":6379")
+		cmd = append(cmd, getRedisServerIP(client, logger, newPod, ":6379"))
+		cmd = append(cmd, getRedisServerIP(client, logger, existingPod, ":6379"))
 	}
 
 	if cr.Spec.KubernetesConfig.ExistingPasswordSecret != nil {
@@ -329,7 +329,7 @@ func RemoveRedisFollowerNodesFromCluster(ctx context.Context, client kubernetes.
 	if *cr.Spec.ClusterVersion == "v7" {
 		cmd = append(cmd, getRedisHostname(existingPod, cr, "leader")+":6379")
 	} else {
-		cmd = append(cmd, getRedisServerIP(client, logger, existingPod)+":6379")
+		cmd = append(cmd, getRedisServerIP(client, logger, existingPod, ":6379"))
 	}
 
 	for _, followerNodeID := range followerNodeIDs {
@@ -360,7 +360,7 @@ func RemoveRedisNodeFromCluster(ctx context.Context, client kubernetes.Interface
 	if *cr.Spec.ClusterVersion == "v7" {
 		cmd = append(cmd, getRedisHostname(existingPod, cr, "leader")+":6379")
 	} else {
-		cmd = append(cmd, getRedisServerIP(client, logger, existingPod)+":6379")
+		cmd = append(cmd, getRedisServerIP(client, logger, existingPod, ":6379"))
 	}
 
 	removePodNodeID := getRedisNodeID(ctx, client, logger, cr, removePod)
@@ -421,7 +421,7 @@ func ClusterFailover(ctx context.Context, client kubernetes.Interface, logger lo
 	if *cr.Spec.ClusterVersion == "v7" {
 		cmd = append(cmd, getRedisHostname(pod, cr, "leader")+":6379")
 	} else {
-		cmd = append(cmd, getRedisServerIP(client, logger, pod)+":6379")
+		cmd = append(cmd, getRedisServerIP(client, logger, pod, ":6379"))
 	}
 
 	if cr.Spec.KubernetesConfig.ExistingPasswordSecret != nil {

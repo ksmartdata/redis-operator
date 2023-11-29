@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/csv"
 	"fmt"
+	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"net"
 	"strconv"
 	"strings"
@@ -26,13 +28,46 @@ type RedisDetails struct {
 }
 
 // getRedisServerIP will return the IP of redis service
-func getRedisServerIP(client kubernetes.Interface, logger logr.Logger, redisInfo RedisDetails) string {
+func getRedisServerIP(client kubernetes.Interface, logger logr.Logger, redisInfo RedisDetails, ports ...string) string {
 	logger.V(1).Info("Fetching Redis pod", "namespace", redisInfo.Namespace, "podName", redisInfo.PodName)
 
 	redisPod, err := client.CoreV1().Pods(redisInfo.Namespace).Get(context.TODO(), redisInfo.PodName, metav1.GetOptions{})
 	if err != nil {
 		logger.Error(err, "Error in getting Redis pod IP", "namespace", redisInfo.Namespace, "podName", redisInfo.PodName)
 		return ""
+	}
+	if redisPod.Status.HostIP != "" {
+	getService:
+		svc, err := client.CoreV1().Services(redisInfo.Namespace).Get(context.Background(), redisInfo.PodName+"-np-svc", metav1.GetOptions{})
+		if errors.IsNotFound(err) {
+			svc := &corev1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: redisInfo.Namespace,
+					Name:      redisInfo.PodName + "-np-svc",
+				},
+				Spec: corev1.ServiceSpec{
+					Ports: []corev1.ServicePort{
+						{
+							Name:       "redis",
+							Port:       6379,
+							TargetPort: intstr.FromInt(6379),
+						},
+					},
+					Type: corev1.ServiceTypeNodePort,
+					Selector: map[string]string{
+						"statefulset.kubernetes.io/pod-name": redisInfo.PodName,
+					},
+				},
+			}
+			_, err = client.CoreV1().Services(redisInfo.PodName).Create(context.Background(), svc, metav1.CreateOptions{})
+			if err != nil {
+				return ""
+			}
+			goto getService
+		} else if err != nil {
+			return ""
+		}
+		return fmt.Sprintf("%s:%d", redisPod.Status.HostIP, +svc.Spec.Ports[0].NodePort)
 	}
 
 	redisIP := redisPod.Status.PodIP
@@ -51,7 +86,11 @@ func getRedisServerIP(client kubernetes.Interface, logger logr.Logger, redisInfo
 	}
 
 	logger.V(1).Info("Successfully got the IP for Redis", "ip", redisIP)
-	return redisIP
+	port := ""
+	if len(ports) >= 0 {
+		port = ports[0]
+	}
+	return redisIP + port
 }
 
 // getRedisHostname will return the complete FQDN for redis
@@ -85,7 +124,7 @@ func CreateMultipleLeaderRedisCommand(client kubernetes.Interface, logger logr.L
 		if cr.Spec.ClusterVersion != nil && *cr.Spec.ClusterVersion == "v7" {
 			address = getRedisHostname(RedisDetails{PodName: podName, Namespace: cr.Namespace}, cr, "leader") + ":6379"
 		} else {
-			address = getRedisServerIP(client, logger, RedisDetails{PodName: podName, Namespace: cr.Namespace}) + ":6379"
+			address = getRedisServerIP(client, logger, RedisDetails{PodName: podName, Namespace: cr.Namespace}, ":6379")
 		}
 		cmd = append(cmd, address)
 	}
@@ -144,8 +183,8 @@ func createRedisReplicationCommand(client kubernetes.Interface, logger logr.Logg
 		followerAddress = getRedisHostname(followerPod, cr, "follower") + ":6379"
 		leaderAddress = getRedisHostname(leaderPod, cr, "leader") + ":6379"
 	} else {
-		followerAddress = getRedisServerIP(client, logger, followerPod) + ":6379"
-		leaderAddress = getRedisServerIP(client, logger, leaderPod) + ":6379"
+		followerAddress = getRedisServerIP(client, logger, followerPod, ":6379")
+		leaderAddress = getRedisServerIP(client, logger, leaderPod, ":6379")
 	}
 
 	cmd = append(cmd, followerAddress, leaderAddress, "--cluster-slave")
@@ -340,14 +379,14 @@ func configureRedisClient(client kubernetes.Interface, logger logr.Logger, cr *r
 			logger.Error(err, "Error in getting redis password")
 		}
 		redisClient = redis.NewClient(&redis.Options{
-			Addr:      getRedisServerIP(client, logger, redisInfo) + ":6379",
+			Addr:      getRedisServerIP(client, logger, redisInfo, ":6379"),
 			Password:  pass,
 			DB:        0,
 			TLSConfig: getRedisTLSConfig(client, logger, cr, redisInfo),
 		})
 	} else {
 		redisClient = redis.NewClient(&redis.Options{
-			Addr:      getRedisServerIP(client, logger, redisInfo) + ":6379",
+			Addr:      getRedisServerIP(client, logger, redisInfo, ":6379"),
 			Password:  "",
 			DB:        0,
 			TLSConfig: getRedisTLSConfig(client, logger, cr, redisInfo),
@@ -459,14 +498,14 @@ func configureRedisReplicationClient(client kubernetes.Interface, logger logr.Lo
 			logger.Error(err, "Error in getting redis password")
 		}
 		redisClient = redis.NewClient(&redis.Options{
-			Addr:      getRedisServerIP(client, logger, redisInfo) + ":6379",
+			Addr:      getRedisServerIP(client, logger, redisInfo, ":6379"),
 			Password:  pass,
 			DB:        0,
 			TLSConfig: getRedisReplicationTLSConfig(client, logger, cr, redisInfo),
 		})
 	} else {
 		redisClient = redis.NewClient(&redis.Options{
-			Addr:      getRedisServerIP(client, logger, redisInfo) + ":6379",
+			Addr:      getRedisServerIP(client, logger, redisInfo, ":6379"),
 			Password:  "",
 			DB:        0,
 			TLSConfig: getRedisReplicationTLSConfig(client, logger, cr, redisInfo),
