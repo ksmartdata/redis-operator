@@ -59,7 +59,7 @@ func getRedisServerIP(client kubernetes.Interface, logger logr.Logger, redisInfo
 					},
 				},
 			}
-			_, err = client.CoreV1().Services(redisInfo.PodName).Create(context.Background(), svc, metav1.CreateOptions{})
+			_, err = client.CoreV1().Services(redisInfo.Namespace).Create(context.Background(), svc, metav1.CreateOptions{})
 			if err != nil {
 				logger.Error(err, "ClusterNodePort:", "namespace", redisInfo.Namespace, "podName", redisInfo.PodName+"-np-svc")
 				return ""
