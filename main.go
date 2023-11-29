@@ -81,14 +81,17 @@ func main() {
 		Metrics: server.Options{
 			BindAddress: metricsAddr,
 		},
-		WebhookServer: &webhook.DefaultServer{
-			Options: webhook.Options{
-				Port: 9443,
-			},
-		},
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "6cab913b.redis.opstreelabs.in",
+	}
+
+	if enableWebhooks {
+		options.WebhookServer = &webhook.DefaultServer{
+			Options: webhook.Options{
+				Port: 9443,
+			},
+		}
 	}
 
 	if ns := os.Getenv("WATCH_NAMESPACE"); ns != "" {
